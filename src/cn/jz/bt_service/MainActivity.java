@@ -19,12 +19,15 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
 	static String MY_UUID = "54ceb2f6-856e-4d17-9e5b-ee5afb474de8";
-	static final int REQUEST_ENABLE_BT = 1;
+	static final int SUCCESS = 1;	//连接成功
+	static final int FAILED = 9;	//发生异常
+	static final int LISTENING = 10; //监听中
+	static final int OVER = 11;	//socket关闭,线程结束
 	BluetoothAdapter mBluetoothAdapter;
-	AcceptTask mTask;
+	AcceptThread mTask;
 	Button mStop;
 	TextView mSuccessCount;
-	TextView mState;
+	TextView mStateView,mLogView;
 	Handler mHandler;
 	int mCount;
 	@Override
@@ -32,11 +35,12 @@ public class MainActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 		mSuccessCount = (TextView) findViewById(R.id.success);
-		mState = (TextView) findViewById(R.id.state);
+		mStateView = (TextView) findViewById(R.id.state);
+		mLogView = (TextView)findViewById(R.id.log);
 		mStop = (Button)findViewById(R.id.stop);
 		mStop.setOnClickListener(new View.OnClickListener() {
 			public void onClick(View arg0) {
-				mTask.cancelListen();
+				mTask.stopService();
 			}
 		});
 		
@@ -57,18 +61,22 @@ public class MainActivity extends Activity {
 				Log.i("sw2df", "hand msg :"+msg.what);
 				switch(msg.what){
 				case 0:
-					mState.setText("初始化...Init");
+					mStateView.setText("初始化...Init");
 					mSuccessCount.setText(" 0");
 					break;
-				case 1:
+				case SUCCESS:
 					mCount++;
 					mSuccessCount.setText(" " + mCount);
 					break;
-				case 10:
-					mState.setText("监听中... listening");
+				case FAILED:
+					mLogView.setText(msg.arg1+"}"+msg.obj.toString());
 					break;
-				case 11:
-					mState.setText("关闭监听... closed");
+				case LISTENING:
+					mStateView.setText("监听中... listening");
+					break;
+				case OVER:
+					mStateView.setText("关闭监听... closed");
+					Toast.makeText(MainActivity.this, "Thread over", 1).show();
 					break;
 				}
 			}
@@ -79,14 +87,14 @@ public class MainActivity extends Activity {
 	@Override
 	protected void onResume() {
 		super.onResume();
-		mTask = new AcceptTask();
+		mTask = new AcceptThread();
 		mTask.start();
 	}
 
 	@Override
 	protected void onDestroy() {
 		if (mTask != null)
-			mTask.cancelListen();
+			mTask.stopService();
 		super.onDestroy();
 	}
 
@@ -97,57 +105,72 @@ public class MainActivity extends Activity {
 		return true;
 	}
 
-	class AcceptTask extends Thread {
-		private BluetoothServerSocket mmServerSocket;
-		boolean runing;
-		protected AcceptTask() {
-			// Use a temporary object that is later assigned to mmServerSocket,
-			// because mmServerSocket is final
-			BluetoothServerSocket tmp = null;
-			mHandler.sendEmptyMessage(0);
-			try {
-				// MY_UUID is the app's UUID string, also used by the client
-				tmp = mBluetoothAdapter.listenUsingRfcommWithServiceRecord(
-						"aa", UUID.fromString(MY_UUID));
-			} catch (IOException e) {
-				loge("81]" + e.toString());
-			}
-			mmServerSocket = tmp;
+	private class AcceptThread extends Thread {
+		//private BluetoothServerSocket serverSocket;
+		private volatile boolean runing;
+		protected AcceptThread() {
+			// Use a temporary object that is later assigned to serverSocket,
+			// because serverSocket is final		
+			//mHandler.sendEmptyMessage(0);
 			runing = true;
 		}
 
 		public void run() {
+			
 			BluetoothSocket socket = null;
+			
 			while (runing) {
+				
+				BluetoothServerSocket serverSocket = null;
+				
 				try {
-					mHandler.sendEmptyMessage(10);
-					socket = mmServerSocket.accept();// 阻塞于此
+					// MY_UUID is the app's UUID string, also used by the client
+					serverSocket = mBluetoothAdapter.listenUsingRfcommWithServiceRecord(
+							"aa", UUID.fromString(MY_UUID));
 				} catch (IOException e) {
-					loge("97]" + e.toString());
+					display(126,e.toString());
 					break;
-				}
-				// If a connection was accepted.
-				if (socket != null) {// 连接成功一次
-					mHandler.sendEmptyMessage(1);
+				}				 
+				//serverSocket must is not null.
+				try {
+					mHandler.sendEmptyMessage(LISTENING);
+					socket = serverSocket.accept();// 阻塞于此					
+				} catch (IOException e) {
+					display(134,e.toString());
+					break;
+				} finally {
+					//It is important .
 					try {
-						socket.close();
+					    serverSocket.close();
 					} catch (IOException e) {
-						loge("111]" + e.toString());
+						display(141,e.toString());
+						break;
 					}
+				}				
+				// socket is not null.
+				mHandler.sendEmptyMessage(SUCCESS);
+				try {
+				   socket.close();
+				} catch (IOException e) {
+				   display(154,e.toString());
+				   break;
 				}
+
 			}
+			mHandler.sendEmptyMessage(OVER);
+			loge("thread over================");
 		}
 
 		/** Will cancel the listening socket, and cause the thread to finish */
-		public void cancelListen() {
-			runing = false;
-			try {
-				mHandler.sendEmptyMessage(11);
-				mmServerSocket.close();
-			} catch (IOException e) {
-				loge("135]" + e.toString());
-			}
+		public void stopService() {
+			runing = false;	
 		}
+		
+		public void display(int msgtype, String e) {
+			Message msg=mHandler.obtainMessage(FAILED, msgtype, 0, e.toString());
+			msg.sendToTarget();
+		}
+		
 	}
 
 	void loge(String s) {
