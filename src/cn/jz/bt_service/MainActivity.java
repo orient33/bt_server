@@ -10,6 +10,7 @@ import android.bluetooth.BluetoothSocket;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.os.Process;
 import android.util.Log;
 import android.view.Menu;
 import android.view.View;
@@ -82,20 +83,23 @@ public class MainActivity extends Activity {
 			}
 			
 		};
-	}
 
-	@Override
-	protected void onResume() {
-		super.onResume();
 		mTask = new AcceptThread();
 		mTask.start();
 	}
 
+	public void onBackPressed() {
+		if (mTask != null && mTask.isAlive()) {
+			Toast.makeText(this, "监听中...，不能退出", 0).show();
+		} else
+			super.onBackPressed();
+	}
 	@Override
 	protected void onDestroy() {
 		if (mTask != null)
 			mTask.stopService();
 		super.onDestroy();
+		Process.killProcess(Process.myPid());
 	}
 
 	@Override
@@ -120,7 +124,6 @@ public class MainActivity extends Activity {
 			BluetoothSocket socket = null;
 			
 			while (runing) {
-				
 				BluetoothServerSocket serverSocket = null;
 				
 				try {
