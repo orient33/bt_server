@@ -24,6 +24,7 @@ public class MainActivity extends Activity {
 	static final int FAILED = 9;	//发生异常
 	static final int LISTENING = 10; //监听中
 	static final int OVER = 11;	//socket关闭,线程结束
+	private boolean SECURE_CONNECT = false;
 	BluetoothAdapter mBluetoothAdapter;
 	AcceptThread mTask;
 	Button mStop;
@@ -127,13 +128,22 @@ public class MainActivity extends Activity {
 		public void run() {
 
 			BluetoothSocket socket = null;
-			
+			Log.d("sw2df", "{server} SECURE_CONNECT is "+ SECURE_CONNECT);
 			while (runing) {
 				
 				try {
 					// MY_UUID is the app's UUID string, also used by the client
-					serverSocket = mBluetoothAdapter.listenUsingRfcommWithServiceRecord(
-							"aa", UUID.fromString(MY_UUID));
+					// SDK 10 is Android 2.3.3
+					if (!SECURE_CONNECT && android.os.Build.VERSION.SDK_INT >= 10) {
+						serverSocket = mBluetoothAdapter.listenUsingInsecureRfcommWithServiceRecord(
+								"aa", UUID.fromString(MY_UUID));
+					} else {
+						if (!SECURE_CONNECT && android.os.Build.VERSION.SDK_INT < 10) {
+							loge("it is not a secure_connect , but SDK Level < 10, and then run secure connect");
+						}
+						serverSocket = mBluetoothAdapter.listenUsingRfcommWithServiceRecord(
+								"aa", UUID.fromString(MY_UUID));
+					}
 				} catch (IOException e) {
 					loge("listenUsingRfcomm...."+e.toString());
 					display(126,e.toString());
