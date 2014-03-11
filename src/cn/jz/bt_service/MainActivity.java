@@ -42,6 +42,7 @@ public class MainActivity extends Activity {
 		mStop.setOnClickListener(new View.OnClickListener() {
 			public void onClick(View arg0) {
 				mTask.stopService();
+				finish();
 			}
 		});
 		
@@ -88,18 +89,21 @@ public class MainActivity extends Activity {
 		mTask.start();
 	}
 
+	private boolean mExit = false;
 	public void onBackPressed() {
-		if (mTask != null && mTask.isAlive()) {
-			Toast.makeText(this, "监听中...，不能退出", 0).show();
-		} else
+		if (mTask != null && mTask.isAlive()&&!mExit) {
+			Toast.makeText(this, "监听中...，再按一下强制退出", 0).show();
+			mExit = true;
+		} else{
 			super.onBackPressed();
+		}
 	}
 	@Override
 	protected void onDestroy() {
 		if (mTask != null)
 			mTask.stopService();
 		super.onDestroy();
-		Process.killProcess(Process.myPid());
+//		Process.killProcess(Process.myPid());
 	}
 
 	@Override
@@ -112,6 +116,7 @@ public class MainActivity extends Activity {
 	private class AcceptThread extends Thread {
 		//private BluetoothServerSocket serverSocket;
 		private volatile boolean runing;
+		BluetoothServerSocket serverSocket = null;
 		protected AcceptThread() {
 			// Use a temporary object that is later assigned to serverSocket,
 			// because serverSocket is final		
@@ -120,11 +125,10 @@ public class MainActivity extends Activity {
 		}
 
 		public void run() {
-			
+
 			BluetoothSocket socket = null;
 			
 			while (runing) {
-				BluetoothServerSocket serverSocket = null;
 				
 				try {
 					// MY_UUID is the app's UUID string, also used by the client
@@ -132,49 +136,60 @@ public class MainActivity extends Activity {
 							"aa", UUID.fromString(MY_UUID));
 				} catch (IOException e) {
 					loge("listenUsingRfcomm...."+e.toString());
-					e.printStackTrace();
 					display(126,e.toString());
 					break;
 				}				 
 				//serverSocket must is not null.
 				try {
 					mHandler.sendEmptyMessage(LISTENING);
-					socket = serverSocket.accept();// 阻塞于此					
+					socket = serverSocket.accept();// 阻塞于此
 				} catch (IOException e) {
 					loge("accept()..."+e.toString());
-					e.printStackTrace();
 					display(134,e.toString());
 					break;
 				} finally {
 					//It is important .
-					try {
-					    serverSocket.close();
-					} catch (IOException e) {
-						loge("close() "+e.toString());
-						e.printStackTrace();
-						display(141,e.toString());
+					if(!listenSocketClose())
 						break;
-					}
 				}				
 				// socket is not null.
 				mHandler.sendEmptyMessage(SUCCESS);
 				try {
-				   socket.close();
+					socket.close();
 				} catch (IOException e) {
-					loge("close() "+e.toString());
-					e.printStackTrace();
-					display(154,e.toString());
+					loge("close() " + e.toString());
+					display(154, e.toString());
 					break;
+				} finally {
+					socket = null;
 				}
-
 			}
 			mHandler.sendEmptyMessage(OVER);
 			loge("thread over================");
 		}
 
+		synchronized private boolean listenSocketClose(){
+			if(serverSocket==null)
+				return true;
+			try {
+			    serverSocket.close();
+			} catch (IOException e) {
+				loge("close() "+e.toString());
+				display(141,e.toString());
+				return false;
+			} finally{
+				serverSocket = null;
+			}
+			return true;
+		}
+		
 		/** Will cancel the listening socket, and cause the thread to finish */
 		public void stopService() {
-			runing = false;	
+			runing = false;
+			Log.d("sw2df","stopService() activly, not an Exception");
+			if(serverSocket!=null){
+				listenSocketClose();
+			}
 		}
 		
 		public void display(int msgtype, String e) {
