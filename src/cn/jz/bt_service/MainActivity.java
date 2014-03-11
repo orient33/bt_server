@@ -131,6 +131,8 @@ public class MainActivity extends Activity {
 					serverSocket = mBluetoothAdapter.listenUsingRfcommWithServiceRecord(
 							"aa", UUID.fromString(MY_UUID));
 				} catch (IOException e) {
+					loge("listenUsingRfcomm...."+e.toString());
+					e.printStackTrace();
 					display(126,e.toString());
 					break;
 				}				 
@@ -139,6 +141,8 @@ public class MainActivity extends Activity {
 					mHandler.sendEmptyMessage(LISTENING);
 					socket = serverSocket.accept();// 阻塞于此					
 				} catch (IOException e) {
+					loge("accept()..."+e.toString());
+					e.printStackTrace();
 					display(134,e.toString());
 					break;
 				} finally {
@@ -146,6 +150,8 @@ public class MainActivity extends Activity {
 					try {
 					    serverSocket.close();
 					} catch (IOException e) {
+						loge("close() "+e.toString());
+						e.printStackTrace();
 						display(141,e.toString());
 						break;
 					}
@@ -155,8 +161,10 @@ public class MainActivity extends Activity {
 				try {
 				   socket.close();
 				} catch (IOException e) {
-				   display(154,e.toString());
-				   break;
+					loge("close() "+e.toString());
+					e.printStackTrace();
+					display(154,e.toString());
+					break;
 				}
 
 			}
