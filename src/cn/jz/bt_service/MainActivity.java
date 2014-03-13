@@ -1,6 +1,7 @@
 package cn.jz.bt_service;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.UUID;
 
 import android.app.Activity;
@@ -23,11 +24,13 @@ public class MainActivity extends Activity {
 	static final int SUCCESS = 1;	//连接成功
 	static final int FAILED = 9;	//发生异常
 	static final int LISTENING = 10; //监听中
+	static final int Reading = 13;
 	static final int OVER = 11;	//socket关闭,线程结束
 	private boolean SECURE_CONNECT = false;
+	private boolean useChanel = false;
 	BluetoothAdapter mBluetoothAdapter;
 	AcceptThread mTask;
-	Button mStop;
+	Button mStop,mStart,mMethod;
 	TextView mSuccessCount;
 	TextView mStateView,mLogView;
 	Handler mHandler;
@@ -39,11 +42,30 @@ public class MainActivity extends Activity {
 		mSuccessCount = (TextView) findViewById(R.id.success);
 		mStateView = (TextView) findViewById(R.id.state);
 		mLogView = (TextView)findViewById(R.id.log);
+		mMethod=(Button)findViewById(R.id.method);
+		mStart=(Button)findViewById(R.id.start);
 		mStop = (Button)findViewById(R.id.stop);
 		mStop.setOnClickListener(new View.OnClickListener() {
 			public void onClick(View arg0) {
-				mTask.stopService();
+				if (mTask != null){
+					mTask.stopService();
+					mTask=null;
+				}
 				finish();
+			}
+		});
+		mStart.setOnClickListener(new View.OnClickListener(){
+			public void onClick(View arg0) {
+				if(mTask!=null&&mTask.isAlive()){
+					Toast.makeText(MainActivity.this, "监听中...", 0).show();
+					return;
+				}
+				mTask = new AcceptThread();
+				mTask.start();
+			}});
+		mMethod.setOnClickListener(new View.OnClickListener() {
+			public void onClick(View arg0) {
+				switchMethod();
 			}
 		});
 		
@@ -61,7 +83,6 @@ public class MainActivity extends Activity {
 		mCount = 0;
 		mHandler = new Handler(){
 			public void handleMessage(Message msg) {
-				Log.i("sw2df", "hand msg :"+msg.what);
 				switch(msg.what){
 				case 0:
 					mStateView.setText("初始化...Init");
@@ -77,6 +98,9 @@ public class MainActivity extends Activity {
 				case LISTENING:
 					mStateView.setText("监听中... listening");
 					break;
+				case Reading:
+					mStateView.setText("accept() OK. read()...");
+					break;
 				case OVER:
 					mStateView.setText("关闭监听... closed");
 					Toast.makeText(MainActivity.this, "Thread over", 1).show();
@@ -85,11 +109,28 @@ public class MainActivity extends Activity {
 			}
 			
 		};
-
-		mTask = new AcceptThread();
-		mTask.start();
+		refreshMethod();
 	}
-
+	
+	private void switchMethod(){
+		if(mTask!=null && mTask.isAlive()){
+			Toast.makeText(this, "监听中...无法切换", 0).show();
+			return;
+		}
+		if(useChanel)
+			useChanel=false;
+		else
+			useChanel=true;
+		refreshMethod();
+	}
+	private void refreshMethod(){
+		if(useChanel){
+			mMethod.setText(" Chanel ");
+		}else{
+			mMethod.setText(" UUID ");
+		}
+	}
+	
 	private boolean mExit = false;
 	public void onBackPressed() {
 		if (mTask != null && mTask.isAlive()&&!mExit) {
@@ -101,10 +142,12 @@ public class MainActivity extends Activity {
 	}
 	@Override
 	protected void onDestroy() {
-		if (mTask != null)
+		if (mTask != null){
 			mTask.stopService();
+			mTask=null;
+		}
 		super.onDestroy();
-//		Process.killProcess(Process.myPid());
+		Process.killProcess(Process.myPid());
 	}
 
 	@Override
@@ -129,39 +172,57 @@ public class MainActivity extends Activity {
 
 			BluetoothSocket socket = null;
 			Log.d("sw2df", "{server} SECURE_CONNECT is "+ SECURE_CONNECT);
-			while (runing) {
-				
-				try {
+			try {
+				if (useChanel) {
+					Method m = BluetoothAdapter.class.getMethod(
+							"listenUsingRfcommOn", int.class);
+					serverSocket = (BluetoothServerSocket) m.invoke(
+							mBluetoothAdapter, 13);
+				} else {
 					// MY_UUID is the app's UUID string, also used by the client
 					// SDK 10 is Android 2.3.3
-					if (!SECURE_CONNECT && android.os.Build.VERSION.SDK_INT >= 10) {
-						serverSocket = mBluetoothAdapter.listenUsingInsecureRfcommWithServiceRecord(
-								"aa", UUID.fromString(MY_UUID));
+					if (!SECURE_CONNECT
+							&& android.os.Build.VERSION.SDK_INT >= 10) {
+						serverSocket = mBluetoothAdapter
+								.listenUsingInsecureRfcommWithServiceRecord(
+										"aa", UUID.fromString(MY_UUID));
 					} else {
-						if (!SECURE_CONNECT && android.os.Build.VERSION.SDK_INT < 10) {
+						if (!SECURE_CONNECT
+								&& android.os.Build.VERSION.SDK_INT < 10) {
 							loge("it is not a secure_connect , but SDK Level < 10, and then run secure connect");
 						}
-						serverSocket = mBluetoothAdapter.listenUsingRfcommWithServiceRecord(
-								"aa", UUID.fromString(MY_UUID));
+						serverSocket = mBluetoothAdapter
+								.listenUsingRfcommWithServiceRecord("aa",
+										UUID.fromString(MY_UUID));
 					}
-				} catch (IOException e) {
-					loge("listenUsingRfcomm...."+e.toString());
-					display(126,e.toString());
-					break;
-				}				 
+				}
+			} catch (Exception e) {
+				loge("listenUsingRfcomm...."+e.toString());
+				display(126,e.toString());
+			}				 
+			while (runing) {
 				//serverSocket must is not null.
 				try {
 					mHandler.sendEmptyMessage(LISTENING);
 					socket = serverSocket.accept();// 阻塞于此
+					try{
+						socket.getOutputStream().write(mCount);
+					}catch(IOException e){
+						loge("client socket write error."+e.getMessage());
+						display(132,e.getMessage());
+					}
+					try{
+						mHandler.sendEmptyMessage(Reading);
+						socket.getInputStream().read();
+					}catch(IOException e){
+						loge("client socket read error."+e.getMessage());
+						display(133,e.getMessage());
+					}
 				} catch (IOException e) {
 					loge("accept()..."+e.toString());
 					display(134,e.toString());
 					break;
-				} finally {
-					//It is important .
-					if(!listenSocketClose())
-						break;
-				}				
+				}
 				// socket is not null.
 				mHandler.sendEmptyMessage(SUCCESS);
 				try {

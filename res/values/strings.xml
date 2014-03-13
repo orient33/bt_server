@@ -4,5 +4,6 @@
     <string name="app_name">bt_服务端</string>
     <string name="action_settings">Settings</string>
     <string name="count">成功次数:</string>
+    <string name="start">开始监听</string>
 	<string name="stop">停止</string>
 </resources>
