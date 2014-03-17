@@ -1,5 +1,7 @@
 package cn.jz.bt_service;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.net.ServerSocket;
@@ -237,6 +239,25 @@ public class MainActivity extends Activity {
 		return true;
 	}
 
+	private char readBTwake(){
+		byte r=-1;
+		FileInputStream fis = null;
+		try{
+			fis= new FileInputStream("/proc/bluetooth/sleep/btwake");
+			fis.skip(7);
+			r = (byte)fis.read();
+		}catch(IOException e){
+			loge("read BTwake error"+e);
+		}finally{
+			try {
+				fis.close();
+			} catch (IOException e) {
+				loge("close BTwake error"+e);
+			}
+		}
+		return (char)r;
+	}
+
 	private class AcceptThread extends Thread {
 		private volatile boolean runing;
 		BluetoothServerSocket serverSocket = null;
@@ -282,20 +303,24 @@ public class MainActivity extends Activity {
 				//serverSocket must is not null.
 				try {
 					mHandler.sendEmptyMessage(LISTENING);
+					if(!mIsGateway)
+						logd(" before accept()  bt_wake = "+readBTwake());
 					socket = serverSocket.accept();// 阻塞于此
+					if(!mIsGateway)
+						logd("after accept()  bt_wake = "+readBTwake());
 					try{
 						socket.getOutputStream().write(++mCount);
 					}catch(IOException e){
 						loge("client socket write error."+e.getMessage());
 						display(132,e.getMessage());
 					}
-					try{
-						mHandler.sendEmptyMessage(Reading);
-						socket.getInputStream().read();
-					}catch(IOException e){
-						loge("client socket read error."+e.getMessage());
-						display(133,e.getMessage());
-					}
+//					try{
+//						mHandler.sendEmptyMessage(Reading);
+//						socket.getInputStream().read();
+//					}catch(IOException e){
+//						loge("client socket read error."+e.getMessage());
+//						display(133,e.getMessage());
+//					}
 				} catch (IOException e) {
 					loge("accept()..."+e.toString());
 					display(134,e.toString());
@@ -347,10 +372,10 @@ public class MainActivity extends Activity {
 		msg.sendToTarget();
 	}
 	void loge(String s) {
-		Log.e("sw2df", s);
+		Log.e("sw2df","{server}"+ s);
 	}
 	void logd(String s) {
-		Log.d("sw2df", s);
+		Log.d("sw2df","{server}"+ s);
 	}
 
 	private class TcpAcceptThread extends Thread {
