@@ -328,15 +328,16 @@ public class MainActivity extends Activity {
 				}
 				// socket is not null.
 				mHandler.sendEmptyMessage(SUCCESS);
-				try {
-					socket.close();
-				} catch (IOException e) {
-					loge("close() " + e.toString());
-					display(154, e.toString());
-					break;
-				} finally {
-					socket = null;
-				}
+				// client to close socket. server never do it
+//				try {
+//					socket.close();
+//				} catch (IOException e) {
+//					loge("close() " + e.toString());
+//					display(154, e.toString());
+//					break;
+//				} finally {
+//					socket = null;
+//				}
 			}
 			mHandler.sendEmptyMessage(OVER);
 			loge("thread over================");
