@@ -309,37 +309,35 @@ public class MainActivity extends Activity {
 					if(!mIsGateway)
 						logd("after accept()  bt_wake = "+readBTwake());
 					try{
-						socket.getOutputStream().write(++mCount);
+						mHandler.sendEmptyMessage(Reading);
+						socket.getInputStream().read();
 					}catch(IOException e){
-						loge("client socket write error."+e.getMessage());
-						display(132,e.getMessage());
+						loge("client socket read error."+e.getMessage());
+						display(133,e.getMessage());
+						break;
 					}
-//					try{
-//						mHandler.sendEmptyMessage(Reading);
-//						socket.getInputStream().read();
-//					}catch(IOException e){
-//						loge("client socket read error."+e.getMessage());
-//						display(133,e.getMessage());
-//					}
 				} catch (IOException e) {
 					loge("accept()..."+e.toString());
 					display(134,e.toString());
 					break;
+				} finally {
+					// socket is not null.
+					try {
+						if (null != socket)
+							socket.close();
+					} catch (IOException e) {
+						loge("close() " + e.toString());
+						display(154, e.toString());
+						break;
+					} finally {
+						socket = null;
+					}
 				}
-				// socket is not null.
+				++mCount;
 				mHandler.sendEmptyMessage(SUCCESS);
-				// client to close socket. server never do it
-//				try {
-//					socket.close();
-//				} catch (IOException e) {
-//					loge("close() " + e.toString());
-//					display(154, e.toString());
-//					break;
-//				} finally {
-//					socket = null;
-//				}
 			}
 			mHandler.sendEmptyMessage(OVER);
+			listenSocketClose();
 			loge("thread over================");
 		}
 
