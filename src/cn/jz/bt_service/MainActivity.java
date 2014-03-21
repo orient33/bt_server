@@ -269,7 +269,8 @@ public class MainActivity extends Activity {
 		public void run() {
 
 			BluetoothSocket socket = null;
-			Log.d("sw2df", "{server} SECURE_CONNECT is "+ SECURE_CONNECT);
+			Log.d("sw2df", "{server} SECURE_CONNECT is "+ SECURE_CONNECT);				 
+			while (runing) {
 			try {
 				if (useMethod==Chanel) {
 					Method m = BluetoothAdapter.class.getMethod(
@@ -298,14 +299,17 @@ public class MainActivity extends Activity {
 			} catch (Exception e) {
 				loge("listenUsingRfcomm...."+e.toString());
 				display(126,e.toString());
-			}				 
-			while (runing) {
+				break;
+			}
 				//serverSocket must is not null.
 				try {
 					mHandler.sendEmptyMessage(LISTENING);
 					if(!mIsGateway)
 						logd(" before accept()  bt_wake = "+readBTwake());
 					socket = serverSocket.accept();// 阻塞于此
+					if(!listenSocketClose()){
+						break;
+					}
 					if(!mIsGateway)
 						logd("after accept()  bt_wake = "+readBTwake());
 					try{
